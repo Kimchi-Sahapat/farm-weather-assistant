@@ -199,6 +199,57 @@ if weather_df is not None:
     else:
         st.info("ℹ️ No data recorded for today.")
 
+
+    # 💬 Chat with Farm Data
+    st.divider()
+    st.subheader("💬 Chat with Your Farm Data")
+
+    if 'history' not in st.session_state:
+        st.session_state['history'] = []
+
+    for message in st.session_state['history']:
+        align = "user" if message['role'] == "user" else "assistant"
+        with st.chat_message(align):
+            st.markdown(message['content'])
+
+    user_message = st.chat_input("Ask anything about rainfall, temperature, farming advice, or pest risks!")
+
+    if user_message:
+        st.session_state['history'].append({"role": "user", "content": user_message})
+
+        with st.chat_message("user"):
+            st.markdown(user_message)
+
+        response = "🤔 Sorry, I didn't understand. Try asking about rainfall, April temperature, farming advice, or pest risks."
+        user_lower = user_message.lower()
+
+        if 'rain' in user_lower and ('last month' in user_lower or 'rainfall' in user_lower):
+            rain = weather_df['Precipitation [mm] (avg)'].sum() if 'Precipitation [mm] (avg)' in weather_df.columns else None
+            if rain is not None:
+                response = f"🌧️ **Total rainfall recorded: {rain:.2f} mm**."
+            else:
+                response = "🌧️ Rainfall data is not available."
+
+        elif 'april' in user_lower and ('hotter' in user_lower or 'temperature' in user_lower):
+            april = weather_df[weather_df['Date/Time'].dt.month == 4]
+            this_year = april[april['Date/Time'].dt.year == datetime.today().year]['HC Air temperature [°C] (avg)'].mean()
+            last_year = april[april['Date/Time'].dt.year == datetime.today().year - 1]['HC Air temperature [°C] (avg)'].mean()
+            if pd.isna(this_year) or pd.isna(last_year):
+                response = "⚠️ Not enough data for April comparison."
+            else:
+                response = f"🌡️ April {datetime.today().year}: {this_year:.2f} °C\n🌡️ April {datetime.today().year -1}: {last_year:.2f} °C"
+
+        elif any(word in user_lower for word in ['advice', 'fertilize', 'recommend', 'action', 'farming']):
+            response = "🌱 Based on recent weather, consider fertilizing after consistent rainfall and avoid during dry stress periods."
+
+        elif 'pest' in user_lower or 'ศัตรูพืช' in user_lower or 'แมลง' in user_lower:
+            response = "🐛 Monitor carefully! Current temperatures could favor pest activity. Increase inspection frequency."
+
+        with st.chat_message("assistant"):
+            st.markdown(response)
+
+        st.session_state['history'].append({"role": "assistant", "content": response})
+
     # 📈 Weather Trends
     st.divider()
     st.subheader("📈 Weather Trends")
