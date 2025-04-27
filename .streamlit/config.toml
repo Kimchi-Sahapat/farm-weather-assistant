@@ -1,6 +1,12 @@
 [theme]
-primaryColor = "#228B22"           # Forest green (buttons, highlights)
-backgroundColor = "#F0FFF0"         # Very light green (main background)
-secondaryBackgroundColor = "#E6FFE6" # Slightly darker light green (containers)
-textColor = "#003300"               # Dark green (text)
-font = "sans serif"
+base="light"
+primaryColor="#365314"
+backgroundColor="#F7FBEA"
+secondaryBackgroundColor="#E2EFD9"
+textColor="#365314"
+font="sans serif"
+
+[server]
+headless = true
+port = 8501
+enableCORS = false
