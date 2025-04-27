@@ -167,6 +167,47 @@ else:
 
 st.divider()
 
+# 🌟 Today's Quick Farm Summary Card
+
+st.divider()
+st.subheader("🌞 Today's Farm Weather Summary")
+
+if weather_df is not None:
+    today = datetime.today().date()
+    today_data = weather_df[weather_df['Date/Time'].dt.date == today]
+
+    if not today_data.empty:
+        total_rain = today_data['Precipitation [mm] (avg)'].sum()
+        avg_temp = today_data['HC Air temperature [°C] (avg)'].mean()
+        min_humid = today_data['HC Relative humidity [%] (min)'].min()
+
+        # Simple pest detection based on today's temperature
+        pest_alerts = []
+        for pest, thresholds in PEST_DATABASE.items():
+            if thresholds['Topt_min'] <= avg_temp <= thresholds['Topt_max']:
+                pest_alerts.append(f"{pest}")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(label="🌧️ Rainfall Today", value=f"{total_rain:.2f} mm")
+
+        with col2:
+            st.metric(label="🌡️ Avg Temperature", value=f"{avg_temp:.2f} °C")
+
+        with col3:
+            st.metric(label="💧 Min Humidity", value=f"{min_humid:.2f} %")
+
+        st.markdown("---")
+
+        if pest_alerts:
+            st.warning(f"⚠️ Pest Risk Detected Today: {', '.join(pest_alerts)}")
+        else:
+            st.success("✅ No major pest risks detected today.")
+    else:
+        st.info("ℹ️ No weather data recorded for today yet.")
+
+
 # Chat Section
 if weather_df is not None:
     st.subheader("💬 Chat with Your Farm Data")
@@ -211,3 +252,52 @@ if weather_df is not None:
             st.markdown(response)
 
         st.session_state['history'].append({"role": "assistant", "content": response})
+
+# 📈 Weather Trend Charts with Time Filter + Moving Average
+
+st.divider()
+st.subheader("📈 Weather Trends")
+
+# 📅 Allow user to choose time range
+time_range = st.selectbox(
+    "Select time range:",
+    ("Last 7 Days", "Last 30 Days", "Last 90 Days", "Last 365 Days")
+)
+
+# Set days back based on choice
+days_back = {
+    "Last 7 Days": 7,
+    "Last 30 Days": 30,
+    "Last 90 Days": 90,
+    "Last 365 Days": 365
+}[time_range]
+
+# Filter data
+if weather_df is not None:
+    filtered_data = weather_df[weather_df['Date/Time'] > datetime.now() - timedelta(days=days_back)]
+
+    # Calculate Moving Averages
+    filtered_data['Rainfall_MA'] = filtered_data['Precipitation [mm] (avg)'].rolling(window=3).mean()
+    filtered_data['Temperature_MA'] = filtered_data['HC Air temperature [°C] (avg)'].rolling(window=3).mean()
+    filtered_data['Humidity_MA'] = filtered_data['HC Relative humidity [%] (min)'].rolling(window=3).mean()
+
+    # Layout charts
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("### 🌧️ Rainfall (Smoothed)")
+        rain_chart = filtered_data[['Date/Time', 'Rainfall_MA']].dropna()
+        rain_chart = rain_chart.set_index('Date/Time')
+        st.line_chart(rain_chart)
+
+    with col2:
+        st.markdown("### 🌡️ Temperature (Smoothed)")
+        temp_chart = filtered_data[['Date/Time', 'Temperature_MA']].dropna()
+        temp_chart = temp_chart.set_index('Date/Time')
+        st.line_chart(temp_chart)
+
+    with col3:
+        st.markdown("### 💧 Humidity (Smoothed)")
+        humid_chart = filtered_data[['Date/Time', 'Humidity_MA']].dropna()
+        humid_chart = humid_chart.set_index('Date/Time')
+        st.line_chart(humid_chart)
