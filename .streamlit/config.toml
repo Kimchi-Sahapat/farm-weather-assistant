@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#228B22"           # Forest green (buttons, highlights)
+backgroundColor = "#F0FFF0"         # Very light green (main background)
+secondaryBackgroundColor = "#E6FFE6" # Slightly darker light green (containers)
+textColor = "#003300"               # Dark green (text)
+font = "sans serif"
