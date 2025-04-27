@@ -13,7 +13,7 @@ lat = st.number_input("Latitude", value=13.736717)
 lon = st.number_input("Longitude", value=100.523186)
 
 # --- Fetch Forecast Data ---
-forecast = fetch_forecast_data(lat, lon)
+forecast_data = get_hourly_forecast(lat, lon)
 radar_url = fetch_radar_image()
 
 # --- Create Folium Map ---
