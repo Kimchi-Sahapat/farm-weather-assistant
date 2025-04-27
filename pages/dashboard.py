@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
+from modules.weather_loader import load_weather_file
 
 # 📦 Helper function for weather file upload
 def load_weather_file(uploaded_file):
@@ -41,12 +42,12 @@ def load_weather_file(uploaded_file):
 def show_dashboard(TEXTS, CROP_BASE_TEMPS):
     st.title(f"📊 {TEXTS['upload_title']}")
 
-    uploaded_file = st.file_uploader(TEXTS['upload_title'], type=["csv", "xls"])
+    uploaded_file = st.file_uploader(TEXTS[lang]['upload_title'], type=["csv", "xls"])
 
-    if uploaded_file:
-        weather_df = load_weather_file(uploaded_file)
-        if weather_df is not None:
-            st.success("✅ File loaded successfully!")
+if uploaded_file:
+    weather_df = load_weather_file(uploaded_file)
+    if weather_df is not None:
+        st.success("✅ Weather data loaded successfully!")
             st.dataframe(weather_df.head())
         else:
             return
