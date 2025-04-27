@@ -2,7 +2,7 @@
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
-from modules.tmd_api import fetch_forecast_data, fetch_radar_image
+from modules.tmd_api import get_hourly_forecast, get_daily_forecast, get_nowcast
 
 # --- Sidebar ---
 st.title("🌦️ Forecast Dashboard")
