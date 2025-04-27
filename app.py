@@ -1,5 +1,6 @@
 # 🌾 Farm Weather Assistant - Ultra Final app.py (Part 1)
 
+from modules.gps_helper import auto_detect_location, manual_select_location
 import streamlit as st
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -12,36 +13,54 @@ import os
 # 📋 Streamlit page config
 st.set_page_config(page_title="Farm Weather Assistant", page_icon="🌾", layout="wide")
 
-# 🌍 Language Selection
+# 🌍 Language and Theme Selection
 with st.sidebar:
     lang = st.radio("🌐 Language / ภาษา", ("English", "ภาษาไทย"))
+    theme = st.radio("🎨 Theme Mode", ("🌞 Light", "🌙 Dark"))
+if theme == "🌙 Dark":
+    st.markdown("""
+        <style>
+        body {
+            background-color: #0E1117;
+            color: #FAFAFA;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-# 🎨 Theme (Light/Dark Mode)
-if 'theme_mode' not in st.session_state:
-    st.session_state.theme_mode = 'light'
+# ✅ Your TMD API credentials
+UID = "u68sahapat"
+UKEY = "8aa48a692a260d6f2319036fa75298cf"
 
-theme = st.sidebar.selectbox(
-    "🎨 Theme Mode",
-    ("light", "dark"),
-    index=0 if st.session_state.theme_mode == 'light' else 1
-)
-st.session_state.theme_mode = theme
+# 🌎 Auto Detect Location
+st.divider()
+st.subheader("📍 My Location and Rain Radar")
 
-# 🗺️ Navigation Sidebar
-with st.sidebar:
-    st.markdown("### 🌾 Farm Weather Assistant")
-    st.markdown("Helping you grow smarter 📈🌱")
-    st.divider()
+col1, col2 = st.columns(2)
 
-    with st.expander("📂 Navigation Menu", expanded=True):
-        page = st.radio(
-            "",
-            ("📊 Dashboard", "📈 Forecast", "📖 Reference"),
-            index=0
-        )
+# --- Column 1: GPS Auto-detect and Manual Fallback
+with col1:
+    gps_mode = st.radio("Location Mode", ("📡 Auto Detect", "🗺️ Manual Select"), index=0)
 
-    st.divider()
-    st.caption("🌾 Powered by Farm Weather Assistant")
+    if gps_mode == "📡 Auto Detect":
+        location = auto_detect_location()
+        if location and 'loc' in location:
+            lat, lon = map(float, location['loc'].split(","))
+            st.success(f"📍 Detected: {location.get('city', 'Unknown')}, {location.get('region', '')}")
+        else:
+            st.warning("⚠️ Auto-detect failed. Please select manually.")
+            lat, lon = manual_select_location()
+    else:
+        lat, lon = manual_select_location()
+
+with col2:
+    m = folium.Map(location=[lat, lon], zoom_start=6)
+    folium.raster_layers.TileLayer(
+        tiles="https://radar.tmd.go.th/Composite_SRI/{z}/{x}/{y}.png",
+        attr="TMD Radar",
+        name="Rain Radar",
+        opacity=0.5,
+    ).add_to(m)
+    st_folium(m, width=400, height=350)
 
 # 🌏 Text Dictionaries (English/Thai)
 TEXTS = {
@@ -61,6 +80,8 @@ TEXTS = {
         "gdd_accumulated": "Accumulated GDD",
         "smart_alerts": "🌟 Smart Farm Alerts",
         "weekly_plan": "📅 Weekly Farm Planner",
+        "location_detected": "Location Detected",
+        "location_not_detected": "Could not auto-detect location. Please select manually.",
     },
     "ภาษาไทย": {
         "upload_title": "อัปโหลดไฟล์สถานีอากาศ (.csv หรือ .xls)",
@@ -78,8 +99,23 @@ TEXTS = {
         "gdd_accumulated": "GDD สะสม",
         "smart_alerts": "🌟 การแจ้งเตือนอัจฉริยะ",
         "weekly_plan": "📅 แผนงานฟาร์มประจำสัปดาห์",
+        "location_detected": "ตรวจพบตำแหน่งที่ตั้ง",
+        "location_not_detected": "ไม่สามารถตรวจจับตำแหน่งอัตโนมัติ กรุณาเลือกเอง",
     }
 }
+
+# 🗺️ Sidebar Navigation
+with st.sidebar:
+    st.markdown("### 🌾 Farm Weather Assistant")
+    st.divider()
+    page = st.radio(
+        "📂 Navigation Menu",
+        ("📊 Dashboard", "📈 Forecast", "📖 Reference"),
+        index=0
+    )
+    st.divider()
+    st.caption("🌾 Powered by Farm Weather Assistant")
+
 
 # 📦 Pest and Crop Databases
 PEST_DATABASE = {
@@ -100,7 +136,6 @@ CROP_BASE_TEMPS = {
     "ข้าว (Rice)": 8,
     "ลิ้นจี่ (Lychee)": 7
 }
-# 🌾 Ultra Final app.py - Part 2: Upload Farm Data + Daily Summary + Smart Alerts
 
 # 📥 Upload Farm Weather Data
 if page == "📊 Dashboard":
@@ -132,7 +167,7 @@ if page == "📊 Dashboard":
                     st.success("✅ XML XLS file loaded!")
                 else:
                     uploaded_file.seek(0)
-                    weather_df = pd.read_excel(uploaded_file, engine="xlrd")
+                    weather_df = pd.read_excel(uploaded_file, engine="openpyxl")
                     weather_df["Date/Time"] = pd.to_datetime(weather_df["Date/Time"], errors="coerce")
                     st.success("✅ XLS file loaded!")
             except Exception as e:
@@ -193,56 +228,69 @@ if page == "📊 Dashboard":
         else:
             st.info("ℹ️ No weather data recorded for today.")
 
-# 🌦️ Weather Radar + GPS Auto Detect
+# 🌦️ Rain Radar + My Location
 st.divider()
-st.subheader("🌧️ Rain Radar and My Location")
+st.subheader("🌧️ " + TEXTS[lang]["radar_title"])
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.components.v1.iframe(
-        "https://www.tmd.go.th/en/weather-radar", 
-        height=400, scrolling=True
+        "https://www.tmd.go.th/en/weather-radar",
+        height=400,
+        scrolling=True
     )
 
 with col2:
-    gps_placeholder = st.empty()
-    gps_button = st.button("📍 Detect My Location")
+    st.markdown("### 📍 " + TEXTS[lang]["location_detected"])
+    lat, lon, city = auto_detect_location()
 
-    if gps_button:
-        try:
-            location = requests.get('https://ipinfo.io/json').json()
-            gps_placeholder.success(f"📍 Approx. Location Detected: {location['city']}, {location['region']}")
-        except:
-            gps_placeholder.error("❌ Could not detect location automatically.")
+    if lat is None or lon is None:
+        st.warning(f"⚠️ {TEXTS[lang]['location_not_detected']}")
+        lat, lon, city = manual_select_location()
+    else:
+        st.success(f"📍 {city}")
+
+    st.map(pd.DataFrame({'lat': [lat], 'lon': [lon]}))
 
 # 🌦️ Forecast Section
 st.divider()
-st.subheader("📈 7-Day Forecast Summary (TMD API)")
+st.subheader("📈 " + TEXTS[lang]["forecast_title"])
 
-# (Assuming you got API Token for TMD API)
-API_KEY = "YOUR_API_KEY_HERE"
-TMD_FORECAST_ENDPOINT = f"https://data.tmd.go.th/nwpapi/api/Weather3Hours?uid={API_KEY}&lat=13.7563&lon=100.5018"
+UID = "u68sahapat"
+UKEY = "8aa48a692a260d6f2319036fa75298cf"
+
+params = {
+    "uid": UID,
+    "ukey": UKEY,
+    "lat": lat,
+    "lon": lon
+}
+
+forecast_url = "https://data.tmd.go.th/nwpapi/v1/forecast/location/daily"
 
 try:
-    forecast_data = requests.get(TMD_FORECAST_ENDPOINT).json()
+    forecast_response = requests.get(forecast_url, params=params, timeout=10)
+    forecast_response.raise_for_status()
+    forecast_data = forecast_response.json().get('WeatherForecasts', [])
 
-    forecast_list = []
-    for entry in forecast_data['WeatherForecasts']:
-        forecast_list.append({
-            "Datetime": entry['DateTime'],
-            "Temperature (°C)": entry['Temperature'],
-            "Rain (%)": entry['RainfallProbability'],
-            "Wind (km/h)": entry['WindSpeed'],
-            "Weather": entry['WeatherDescriptionTH'] if lang == "ภาษาไทย" else entry['WeatherDescription']
-        })
+    if forecast_data:
+        forecast_list = []
+        for entry in forecast_data:
+            forecast_list.append({
+                "Datetime": entry['DateTime'],
+                "Temperature (°C)": entry['Temperature']['Value'],
+                "Rain (%)": entry['Rain']['Value'],
+                "Wind (km/h)": entry['WindSpeed']['Value'],
+                "Weather": entry['WeatherDescriptionTH'] if lang == "ภาษาไทย" else entry['WeatherDescription']
+            })
 
-    forecast_df = pd.DataFrame(forecast_list)
+        forecast_df = pd.DataFrame(forecast_list)
 
-    # Show Forecast Cards
-    for idx, row in forecast_df.head(7).iterrows():
-        st.info(f"**{row['Datetime']}**\n\n🌡️ {row['Temperature (°C)']} °C | 🌧️ {row['Rain (%)']}% chance | 🌬️ {row['Wind (km/h)']} km/h\n\n{row['Weather']}")
-
+        for idx, row in forecast_df.head(7).iterrows():
+            st.info(f"**{row['Datetime']}**\n\n🌡️ {row['Temperature (°C)']} °C | 🌧️ {row['Rain (%)']}% chance | 🌬️ {row['Wind (km/h)']} km/h\n\n{row['Weather']}")
+    else:
+        st.warning("⚠️ No forecast data received.")
 except Exception as e:
     st.warning(f"⚠️ Could not fetch forecast: {e}")
 
@@ -250,38 +298,53 @@ except Exception as e:
 st.divider()
 st.subheader("🚦 Risk Timeline (Next 7 Days)")
 
-risk_colors = []
-for rain in forecast_df['Rain (%)'].head(7):
-    if rain >= 80:
-        risk_colors.append("🔴 Very High")
-    elif rain >= 50:
-        risk_colors.append("🟠 High")
-    elif rain >= 20:
-        risk_colors.append("🟡 Moderate")
-    else:
-        risk_colors.append("🟢 Low")
+if 'forecast_df' in locals() and not forecast_df.empty:
+    risk_colors = []
+    for rain in forecast_df['Rain (%)'].head(7):
+        if rain >= 80:
+            risk_colors.append("🔴 Very High")
+        elif rain >= 50:
+            risk_colors.append("🟠 High")
+        elif rain >= 20:
+            risk_colors.append("🟡 Moderate")
+        else:
+            risk_colors.append("🟢 Low")
 
-risk_df = pd.DataFrame({
-    "Date": forecast_df['Datetime'].head(7),
-    "Rain Chance": forecast_df['Rain (%)'].head(7),
-    "Risk Level": risk_colors
-})
+    risk_df = pd.DataFrame({
+        "Date": forecast_df['Datetime'].head(7),
+        "Rain Chance (%)": forecast_df['Rain (%)'].head(7),
+        "Risk Level": risk_colors
+    })
 
-st.dataframe(risk_df)
+    st.dataframe(risk_df)
+else:
+    st.info("No forecast data to generate Risk Timeline.")
+
 
 # 🌱 Smart Fertilizer and Pest Advisory
 st.divider()
-st.subheader("🧠 Smart Farm Advisory")
+st.subheader("🧠 " + TEXTS[lang]["smart_alerts"])
 
 advisory_msgs = []
 
-# Fertilizer Advice
-if forecast_df['Rain (%)'].mean() > 60:
-    advisory_msgs.append("🌧️ Frequent rains expected. Delay fertilizer application to avoid leaching.")
-elif forecast_df['Rain (%)'].mean() < 20:
-    advisory_msgs.append("🌞 Dry conditions ahead. Irrigate before fertilization for better absorption.")
+if 'forecast_df' in locals() and not forecast_df.empty:
+    if forecast_df['Rain (%)'].mean() > 60:
+        advisory_msgs.append("🌧️ Frequent rains expected. Delay fertilizer application.")
+    elif forecast_df['Rain (%)'].mean() < 20:
+        advisory_msgs.append("🌞 Dry conditions ahead. Irrigate before fertilizing.")
+    else:
+        advisory_msgs.append("✅ Good weather for fertilizer application.")
+
+    if forecast_df['Rain (%)'].max() > 80:
+        advisory_msgs.append("🐛 Pest outbreak risk due to humidity. Monitor crops closely.")
+    elif forecast_df['Temperature (°C)'].mean() > 32:
+        advisory_msgs.append("🔥 Hot weather alert: Monitor mites and heat-stress signs.")
+
+    for msg in advisory_msgs:
+        st.success(msg)
 else:
-    advisory_msgs.append("✅ Weather suitable for fertilizer application this week.")
+    st.info("ℹ️ No forecast data available for advisory.")
+
 
 # Pest Outbreak Risk
 if forecast_df['Rain (%)'].max() > 80:
@@ -298,33 +361,44 @@ for msg in advisory_msgs:
 
 # 📅 Weekly Farm Task Planner
 st.divider()
-st.subheader("📅 Weekly Farm Task Planner (Auto-Generated)")
+st.subheader("📅 " + TEXTS[lang]["weekly_plan"])
 
-today = datetime.now()
-planner_tasks = []
+if 'forecast_df' in locals() and not forecast_df.empty:
+    today = datetime.now()
+    planner_tasks = []
 
-for i in range(7):
-    future_day = today + timedelta(days=i)
-    rain_chance = forecast_df.iloc[i]['Rain (%)'] if i < len(forecast_df) else 0
-    task = ""
+    for i in range(7):
+        future_day = today + timedelta(days=i)
+        rain_chance = forecast_df.iloc[i]['Rain (%)'] if i < len(forecast_df) else 0
+        task = ""
 
-    if rain_chance >= 70:
-        task = "🌧️ Avoid spraying, delay fieldwork, inspect for pests."
-    elif rain_chance <= 20:
-        task = "☀️ Good day for fertilizing, planting, or soil work."
-    else:
-        task = "🌤️ Moderate risk. Monitor morning conditions before activities."
+        if rain_chance >= 70:
+            task = "🌧️ Avoid spraying, delay fieldwork, inspect fields."
+        elif rain_chance <= 20:
+            task = "☀️ Good day for fertilizing, planting, or soil work."
+        else:
+            task = "🌤️ Moderate risk. Check morning weather."
 
-    planner_tasks.append({
-        "Date": future_day.strftime("%a %d %b"),
-        "Recommended Task": task
-    })
+        planner_tasks.append({
+            "Date": future_day.strftime("%a %d %b"),
+            "Recommended Task": task
+        })
 
-task_df = pd.DataFrame(planner_tasks)
-st.dataframe(task_df)
+    task_df = pd.DataFrame(planner_tasks)
+    st.dataframe(task_df)
+else:
+    st.info("ℹ️ No forecast data for weekly planner.")
 
-# 🎨 Bonus Polish: Light/Dark Theme
-theme_mode = st.sidebar.radio("🎨 Theme Mode", ["🌞 Light", "🌙 Dark"], index=0)
+# 🎨 Theme Mode
+if 'theme_mode' not in st.session_state:
+    st.session_state.theme_mode = 'light'
+
+theme_mode = st.sidebar.radio(
+    "🎨 Theme Mode",
+    ["🌞 Light", "🌙 Dark"],
+    index=0 if st.session_state.theme_mode == 'light' else 1
+)
+st.session_state.theme_mode = theme_mode
 
 if theme_mode == "🌙 Dark":
     st.markdown(
