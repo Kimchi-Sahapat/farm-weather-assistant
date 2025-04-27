@@ -34,11 +34,11 @@ def analyze_forecast(forecast_data):
     
     return {
         "rain_risk": max(rain_risks, key=rain_risks.count),
-        "avg_temp": sum(temp_risks) / len(temp_risks),
+        "avg_temp": sum(temp_risks) / len(temp_risks) if temp_risks else 0,
         "pest_risk": max(pest_risks, key=pest_risks.count)
     }
 
-def generate_alerts(forecast_data, gdd_value):
+def generate_smart_alerts(forecast_data, gdd_value):
     analysis = analyze_forecast(forecast_data)
     alerts = []
     
