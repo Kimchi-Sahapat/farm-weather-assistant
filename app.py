@@ -1,4 +1,4 @@
-# Full app.py for Farm Weather Assistant (with Welcome Message, Charts Patch, Reference Page)
+# Full app.py for Farm Weather Assistant (Sidebar Pages Version)
 
 import streamlit as st
 import pandas as pd
@@ -22,6 +22,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Sidebar Page Selection
+page = st.sidebar.radio("📂 Navigate", ["📊 Dashboard", "📖 Reference Values"])
+
 # Pest and Crop Databases
 PEST_DATABASE = {
     "เพลี้ยไฟ": {"Topt_min": 28, "Topt_max": 32, "Note": "Sensitive to light and low humidity."},
@@ -43,7 +46,6 @@ CROP_BASE_TEMPS = {
 }
 
 # 📦 Helper Functions
-
 def load_raw_weather_file(file):
     try:
         df = pd.read_csv(file, parse_dates=['Date/Time'])
@@ -56,11 +58,9 @@ def load_raw_weather_file(file):
             tree = ET.parse(file)
             root = tree.getroot()
             namespace = {'ss': 'urn:schemas-microsoft-com:office:spreadsheet'}
-
             worksheet = root.find('.//ss:Worksheet', namespace)
             table = worksheet.find('.//ss:Table', namespace)
             rows = table.findall('.//ss:Row', namespace)
-
             data = []
             for row in rows:
                 values = []
@@ -71,7 +71,6 @@ def load_raw_weather_file(file):
                     else:
                         values.append(None)
                 data.append(values)
-
             header_1 = data[0]
             header_2 = data[1]
             new_columns = []
@@ -80,7 +79,6 @@ def load_raw_weather_file(file):
                     new_columns.append(h2)
                 else:
                     new_columns.append(f"{h1} ({h2})")
-
             fixed_data = []
             for row in data[2:]:
                 if len(row) < len(new_columns):
@@ -88,7 +86,6 @@ def load_raw_weather_file(file):
                 elif len(row) > len(new_columns):
                     row = row[:len(new_columns)]
                 fixed_data.append(row)
-
             df = pd.DataFrame(fixed_data, columns=new_columns)
             df = df.dropna(axis=1, how='all')
             df.rename(columns={df.columns[0]: 'Date/Time'}, inplace=True)
@@ -120,9 +117,7 @@ def calculate_gdd(df, base_temperature=10, reset_date=None):
             return df
     else:
         df['GDD'] = ((df['HC Air temperature [°C] (max)'] + df['HC Air temperature [°C] (min)']) / 2) - base_temperature
-
     df['GDD'] = df['GDD'].apply(lambda x: x if x > 0 else 0)
-
     accumulated = []
     total = 0
     for idx, row in df.iterrows():
@@ -130,79 +125,65 @@ def calculate_gdd(df, base_temperature=10, reset_date=None):
             total = 0
         total += row['GDD']
         accumulated.append(total)
-
     df['Accumulated GDD'] = accumulated
     return df
 
-
-# Upload file section
-uploaded_file = st.file_uploader("Upload your weather station file (.csv or .xls)", type=["csv", "xls"])
-
-if uploaded_file is not None:
-    with st.spinner("Processing your file..."):
-        weather_df = load_raw_weather_file(uploaded_file)
-    if weather_df is not None:
-        st.success("✅ Weather data loaded successfully!")
-        available_columns = list(weather_df.columns)
-        st.info(f"📚 **Available Data Columns:** {', '.join(available_columns)}")
-else:
-    weather_df = None
-
-if weather_df is not None:
-    # 🌱 Select Your Crop
-    st.divider()
-    st.subheader("🌱 Select Your Crop")
-    selected_crop = st.selectbox("เลือกชนิดพืชที่ปลูก:", options=list(CROP_BASE_TEMPS.keys()), index=0)
-    base_temp = CROP_BASE_TEMPS[selected_crop]
-    st.success(f"✅ Selected Crop: {selected_crop} (Base Temperature = {base_temp}°C)")
-
-    # 🌞 Today's Farm Weather Summary
-    st.divider()
-    st.subheader("🌞 Today's Farm Weather Summary")
-    today = datetime.today().date()
-    today_data = weather_df[weather_df['Date/Time'].dt.date == today]
-
-    if not today_data.empty:
-        rainfall_today = today_data['Precipitation [mm] (avg)'].sum() if 'Precipitation [mm] (avg)' in today_data.columns else None
-        avg_temp_today = today_data['HC Air temperature [°C] (avg)'].mean() if 'HC Air temperature [°C] (avg)' in today_data.columns else None
-        min_humid_today = today_data['HC Relative humidity [%] (min)'].min() if 'HC Relative humidity [%] (min)' in today_data.columns else None
-
-        if 'HC Air temperature [°C] (max)' in today_data.columns and 'HC Air temperature [°C] (min)' in today_data.columns:
-            today_max = today_data['HC Air temperature [°C] (max)'].max()
-            today_min = today_data['HC Air temperature [°C] (min)'].min()
-            gdd_today = ((today_max + today_min) / 2) - base_temp
-        elif avg_temp_today is not None:
-            gdd_today = avg_temp_today - base_temp
-        else:
-            gdd_today = None
-
-        gdd_today = gdd_today if (gdd_today is not None and gdd_today > 0) else 0
-
-        reset_start_date = datetime(2024, 12, 1).date()
-        gdd_df = calculate_gdd(weather_df, base_temperature=base_temp, reset_date=reset_start_date)
-        last_gdd = gdd_df['Accumulated GDD'].iloc[-1] if 'Accumulated GDD' in gdd_df.columns else None
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("🌧️ Rainfall Today", f"{rainfall_today:.2f} mm" if rainfall_today is not None else "Data Not Found")
-        with col2:
-            st.metric("🌡️ Avg Temp Today", f"{avg_temp_today:.2f} °C" if avg_temp_today is not None else "Data Not Found")
-        with col3:
-            st.metric("💧 Min Humidity", f"{min_humid_today:.2f} %" if min_humid_today is not None else "Data Not Found")
-
-        col4, col5 = st.columns(2)
-        with col4:
-            st.metric("🌱 GDD Today", f"{gdd_today:.2f}°C-days" if gdd_today is not None else "Data Not Found")
-        with col5:
-            st.metric("🌱 Accumulated GDD", f"{last_gdd:.2f}°C-days" if last_gdd is not None else "Data Not Found")
-
+# 🔥 Start Page Rendering based on Sidebar
+if page == "📊 Dashboard":
+    uploaded_file = st.file_uploader("Upload your weather station file (.csv or .xls)", type=["csv", "xls"])
+    if uploaded_file is not None:
+        with st.spinner("Processing your file..."):
+            weather_df = load_raw_weather_file(uploaded_file)
+        if weather_df is not None:
+            st.success("✅ Weather data loaded successfully!")
+            available_columns = list(weather_df.columns)
+            st.info(f"📚 **Available Data Columns:** {', '.join(available_columns)}")
     else:
-        st.info("ℹ️ No data recorded for today.")
+        weather_df = None
 
+    if weather_df is not None:
+        # Crop Select
+        st.divider()
+        st.subheader("🌱 Select Your Crop")
+        selected_crop = st.selectbox("เลือกชนิดพืชที่ปลูก:", options=list(CROP_BASE_TEMPS.keys()), index=0)
+        base_temp = CROP_BASE_TEMPS[selected_crop]
+        st.success(f"✅ Selected Crop: {selected_crop} (Base Temp = {base_temp}°C)")
 
-    # 💬 Chat with Farm Data
-    st.divider()
-    st.subheader("💬 Chat with Your Farm Data")
+        # Daily Farm Summary
+        st.divider()
+        st.subheader("🌞 Today's Farm Weather Summary")
+        today = datetime.today().date()
+        today_data = weather_df[weather_df['Date/Time'].dt.date == today]
+
+        if not today_data.empty:
+            rainfall_today = today_data['Precipitation [mm] (avg)'].sum() if 'Precipitation [mm] (avg)' in today_data.columns else None
+            avg_temp_today = today_data['HC Air temperature [°C] (avg)'].mean() if 'HC Air temperature [°C] (avg)' in today_data.columns else None
+            min_humid_today = today_data['HC Relative humidity [%] (min)'].min() if 'HC Relative humidity [%] (min)' in today_data.columns else None
+            gdd_today = ((today_data['HC Air temperature [°C] (max)'].max() + today_data['HC Air temperature [°C] (min)'].min()) / 2) - base_temp if 'HC Air temperature [°C] (max)' in today_data.columns and 'HC Air temperature [°C] (min)' in today_data.columns else (avg_temp_today - base_temp if avg_temp_today else None)
+            gdd_today = gdd_today if (gdd_today is not None and gdd_today > 0) else 0
+            reset_start_date = datetime(2024, 12, 1).date()
+            gdd_df = calculate_gdd(weather_df, base_temperature=base_temp, reset_date=reset_start_date)
+            last_gdd = gdd_df['Accumulated GDD'].iloc[-1] if 'Accumulated GDD' in gdd_df.columns else None
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("🌧️ Rainfall Today", f"{rainfall_today:.2f} mm" if rainfall_today else "Data Not Found")
+            with col2:
+                st.metric("🌡️ Avg Temp Today", f"{avg_temp_today:.2f} °C" if avg_temp_today else "Data Not Found")
+            with col3:
+                st.metric("💧 Min Humidity", f"{min_humid_today:.2f} %" if min_humid_today else "Data Not Found")
+
+            col4, col5 = st.columns(2)
+            with col4:
+                st.metric("🌱 GDD Today", f"{gdd_today:.2f}°C-days" if gdd_today else "Data Not Found")
+            with col5:
+                st.metric("🌱 Accumulated GDD", f"{last_gdd:.2f}°C-days" if last_gdd else "Data Not Found")
+        else:
+            st.info("ℹ️ No data recorded for today.")
+
+        # Chatbot Section
+        st.divider()
+        st.subheader("💬 Chat with Your Farm Data")
 
     if 'history' not in st.session_state:
         st.session_state['history'] = []
@@ -250,8 +231,8 @@ if weather_df is not None:
 
         st.session_state['history'].append({"role": "assistant", "content": response})
 
-    # 📈 Weather Trends
-    st.divider()
+        # 📈 Weather Trends
+        st.divider()
     st.subheader("📈 Weather Trends")
     time_range = st.selectbox("Select time range:", ("Last 7 Days", "Last 30 Days", "Last 90 Days", "Last 365 Days"))
     days_back = {"Last 7 Days": 7, "Last 30 Days": 30, "Last 90 Days": 90, "Last 365 Days": 365}[time_range]
@@ -301,10 +282,8 @@ if weather_df is not None:
         else:
             st.info("No Humidity Data Available")
 
-    # 📖 Reference Values
-    st.divider()
+elif page == "📖 Reference Values":
     st.subheader("📖 Reference Values and Assumptions")
-
     st.markdown("### 🐛 Pest Optimal Temperature Ranges")
     pest_data = []
     for pest, details in PEST_DATABASE.items():
@@ -320,9 +299,9 @@ if weather_df is not None:
     st.dataframe(crop_df)
 
     st.info("""
-    - GDD Target Default: **500°C-days** (modifiable later)
+    - GDD Target Default: **500°C-days**
     - Trend smoothing: **3-day moving average**
-    - Rainfall, Temperature, and Humidity trends based on station's uploaded data
+    - Rainfall, Temperature, and Humidity trends based on uploaded weather station data
     """)
 
 # Footer
