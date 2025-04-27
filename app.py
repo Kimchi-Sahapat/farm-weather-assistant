@@ -1,5 +1,5 @@
 # app.py
-# Streamlit Web App: Farm Weather Assistant (Chatbot Version)
+# Streamlit Web App: Farm Weather Assistant (Chatbot Version + Pest Warning)
 
 import streamlit as st
 import pandas as pd
@@ -42,6 +42,31 @@ def recommend_agriculture_action(df):
     else:
         return "📍 No special agricultural actions recommended at this time."
 
+# Pest thresholds database
+PEST_DATABASE = {
+    "เพลี้ยไฟ": {"Topt_min": 28, "Topt_max": 32, "Note": "Sensitive to light and low humidity."},
+    "เพลี้ยแป้ง": {"Topt_min": 25, "Topt_max": 30, "Note": "Prefers stable climates."},
+    "ไรแดง": {"Topt_min": 30, "Topt_max": 32, "Note": "Outbreaks in dry air."},
+    "หนอนเจาะผลไม้": {"Topt_min": 28, "Topt_max": 30, "Note": "Very important in mango/durian."},
+    "ด้วงวงมะม่วง": {"Topt_min": 30, "Topt_max": 30, "Note": "Moves quickly during hot season."},
+    "หนอนกระทู้": {"Topt_min": 27, "Topt_max": 30, "Note": "Life cycle speed up."},
+    "แมลงวันผลไม้": {"Topt_min": 27, "Topt_max": 30, "Note": "Lays eggs during early ripening."}
+}
+
+def check_pest_risks(df):
+    recent_days = df[df['Date/Time'] > datetime.now() - timedelta(days=7)]
+    avg_temp = recent_days['HC Air temperature [°C] (avg)'].mean()
+    pest_warnings = []
+
+    for pest, data in PEST_DATABASE.items():
+        if data['Topt_min'] <= avg_temp <= data['Topt_max']:
+            pest_warnings.append(f"- **{pest}**: Avg Temp {avg_temp:.1f}°C matches Topt {data['Topt_min']}-{data['Topt_max']}°C → {data['Note']}")
+
+    if pest_warnings:
+        return "⚠️ **Pest Risk Detected:**\n" + "\n".join(pest_warnings)
+    else:
+        return "✅ No significant pest risks detected based on recent temperatures."
+
 # Streamlit App UI
 st.title("🌾 Farm Weather Assistant - Chat Mode")
 st.markdown("Chat naturally with your farm weather data!")
@@ -71,7 +96,7 @@ if weather_df is not None:
         with st.chat_message(message['role']):
             st.markdown(message['content'])
 
-    user_message = st.chat_input("Ask about rainfall, temperature, or farming advice!")
+    user_message = st.chat_input("Ask about rainfall, temperature, farming advice, or pest risks!")
 
     if user_message:
         st.session_state['history'].append({"role": "user", "content": user_message})
@@ -80,7 +105,7 @@ if weather_df is not None:
             st.markdown(user_message)
 
         # Bot thinking
-        response = "🤔 Sorry, I didn't understand. Try asking about rainfall, April temperature, or farming advice."
+        response = "🤔 Sorry, I didn't understand. Try asking about rainfall, April temperature, farming advice, or pest risks."
 
         user_lower = user_message.lower()
 
@@ -98,6 +123,9 @@ if weather_df is not None:
         elif any(word in user_lower for word in ['advice', 'fertilize', 'recommend', 'action', 'farming']):
             recommendation = recommend_agriculture_action(weather_df)
             response = recommendation
+
+        elif 'pest' in user_lower or 'ศัตรูพืช' in user_lower or 'แมลง' in user_lower:
+            response = check_pest_risks(weather_df)
 
         with st.chat_message("assistant"):
             st.markdown(response)
