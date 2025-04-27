@@ -1,5 +1,5 @@
-# app_pretty.py (patched + friendly loading)
-# Streamlit Web App: Farm Weather Assistant (Beautiful UI + Smooth UX)
+# app_pretty.py (final patch: force xlrd engine for xls)
+# Streamlit Web App: Farm Weather Assistant (Beautiful UI + Full Format Support)
 
 import streamlit as st
 import pandas as pd
@@ -15,13 +15,11 @@ DATA_FILE = 'Cleaned_Farm_Weather_Data.csv'
 
 def load_raw_weather_file(file):
     try:
-        # Try reading as CSV first
         df = pd.read_csv(file, parse_dates=['Date/Time'])
         return df
     except Exception:
         try:
-            # Try reading as Excel (station binary xls)
-            df = pd.read_excel(file)
+            df = pd.read_excel(file, engine='xlrd')  # Force xlrd engine
             if 'Date/Time' not in df.columns:
                 df.columns = df.iloc[1]
                 df = df.drop([0,1]).reset_index(drop=True)
