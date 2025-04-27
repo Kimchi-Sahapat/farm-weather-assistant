@@ -1,27 +1,35 @@
 # 🌾 Farm Weather Assistant
 
-Farm Weather Assistant is a Streamlit web app designed to help farmers and agricultural managers make better decisions based on real weather station data.
+**Farm Weather Assistant** is a bilingual (🇬🇧 English / 🇹🇭 Thai) smart farm management application.
 
-✅ Upload your raw station `.xls` or cleaned `.csv` weather data.  
-✅ Chat naturally with your farm data.  
-✅ Get insights on:
-- Rainfall amounts
-- Temperature comparisons (April this year vs last year)
-- Farming action recommendations
-- Pest threats detection based on temperature
+It helps farmers make smarter decisions using real-time weather station data and live forecast APIs from the Thailand Meteorological Department (TMD).
 
-## 📂 How to Use
+---
 
-1. Upload your weather data file (.csv or .xls).
-2. Ask natural questions like:
-   - "How much rain did we get last month?"
-   - "Was this April hotter than last year's April?"
-   - "Is it a good time to fertilize?"
-   - "Any pest threats this week?"
+## 🚀 Features
+- Upload and analyze your weather station data (.csv / .xls)
+- View 48-hour and 10-day forecasts directly from TMD
+- Smart fertilizer, irrigation, and pest outbreak advisories
+- Rainfall, temperature, and humidity trend visualization
+- Risk timeline (color-coded: green/yellow/red)
+- Historical climate dashboard
+- Bilingual interface 🇬🇧 English / 🇹🇭 Thai
 
-3. Get actionable advice instantly!
+---
 
-## 🛠 Requirements
+## 🛠️ How to Run
 
-Make sure the following packages are installed:
+1. Clone the repository or download the folder
+2. Install required packages:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3. Launch the app:
+    ```bash
+    streamlit run app.py
+    ```
+
+---
+
+## 📂 Folder Structure
 
