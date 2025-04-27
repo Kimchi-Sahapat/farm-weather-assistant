@@ -1,11 +1,13 @@
-# app.py
-# Streamlit Web App: Farm Weather Assistant (Chatbot Version + Pest Warning + Raw XLS Support)
+# app_pretty.py
+# Streamlit Web App: Farm Weather Assistant (Beautiful UI Version)
 
 import streamlit as st
 import pandas as pd
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 import os
+
+st.set_page_config(page_title="Farm Weather Assistant", page_icon="🌾", layout="wide")
 
 # Default file path
 DATA_FILE = 'Cleaned_Farm_Weather_Data.csv'
@@ -14,11 +16,9 @@ DATA_FILE = 'Cleaned_Farm_Weather_Data.csv'
 
 def load_raw_weather_file(file):
     try:
-        # Try reading as CSV first
         df = pd.read_csv(file, parse_dates=['Date/Time'])
         return df
     except Exception:
-        # Try parsing as XML Spreadsheet 2003 (special .xls)
         tree = ET.parse(file)
         root = tree.getroot()
         namespace = {'ss': 'urn:schemas-microsoft-com:office:spreadsheet'}
@@ -38,7 +38,6 @@ def load_raw_weather_file(file):
                     values.append(None)
             data.append(values)
 
-        # Handle header
         header_1 = data[0]
         header_2 = data[1]
         new_columns = []
@@ -49,15 +48,9 @@ def load_raw_weather_file(file):
                 new_columns.append(f"{h1} ({h2})")
 
         df = pd.DataFrame(data[2:], columns=new_columns)
-
-        # Drop fully empty columns
         df = df.dropna(axis=1, how='all')
-
-        # Fix Date/Time
         df.rename(columns={df.columns[0]: 'Date/Time'}, inplace=True)
         df['Date/Time'] = pd.to_datetime(df['Date/Time'], errors='coerce')
-
-        # Convert numerical columns
         for col in df.columns[1:]:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
@@ -117,12 +110,18 @@ def check_pest_risks(df):
         return "✅ No significant pest risks detected based on recent temperatures."
 
 # Streamlit App UI
-st.title("🌾 Farm Weather Assistant - Chat Mode")
-st.markdown("Chat naturally with your farm weather data!")
+st.markdown("""
+# 🌾 Farm Weather Assistant
+Welcome to your smart farming companion.
+Chat naturally with your weather data and receive farming advice and pest warnings!
+""")
+
 st.divider()
 
 # File uploader
-uploaded_file = st.file_uploader("Upload a Cleaned CSV or Raw XLS from Weather Station", type=["csv", "xls"])
+with st.container():
+    st.subheader("📂 Upload Farm Weather Data")
+    uploaded_file = st.file_uploader("Upload a Cleaned CSV or Raw XLS from Weather Station", type=["csv", "xls"])
 
 if uploaded_file is not None:
     weather_df = load_raw_weather_file(uploaded_file)
@@ -137,14 +136,16 @@ else:
 st.divider()
 
 if weather_df is not None:
+    st.subheader("💬 Chat with Your Farm Data")
     if 'history' not in st.session_state:
         st.session_state['history'] = []
 
     for message in st.session_state['history']:
-        with st.chat_message(message['role']):
+        align = "user" if message['role'] == "user" else "assistant"
+        with st.chat_message(align):
             st.markdown(message['content'])
 
-    user_message = st.chat_input("Ask about rainfall, temperature, farming advice, or pest risks!")
+    user_message = st.chat_input("Ask anything about rainfall, temperature, farming advice, or pest risks!")
 
     if user_message:
         st.session_state['history'].append({"role": "user", "content": user_message})
@@ -153,19 +154,18 @@ if weather_df is not None:
             st.markdown(user_message)
 
         response = "🤔 Sorry, I didn't understand. Try asking about rainfall, April temperature, farming advice, or pest risks."
-
         user_lower = user_message.lower()
 
         if 'rain' in user_lower and ('last month' in user_lower or 'rainfall' in user_lower):
             rain = get_total_rainfall_last_month(weather_df)
-            response = f"🌧️ Total rainfall last month: **{rain:.2f} mm**."
+            response = f"🌧️ **Total rainfall last month: {rain:.2f} mm**."
 
         elif 'april' in user_lower and ('hotter' in user_lower or 'temperature' in user_lower):
             this_year, last_year = compare_april_temperature(weather_df)
             if pd.isna(this_year) or pd.isna(last_year):
                 response = "⚠️ Not enough data available for April temperature comparison."
             else:
-                response = f"🌡️ April {datetime.today().year}: **{this_year:.2f} °C**\n🌡️ April {datetime.today().year-1}: **{last_year:.2f} °C**."
+                response = f"🌡️ **April {datetime.today().year}: {this_year:.2f} °C**\n🌡️ **April {datetime.today().year-1}: {last_year:.2f} °C**."
 
         elif any(word in user_lower for word in ['advice', 'fertilize', 'recommend', 'action', 'farming']):
             recommendation = recommend_agriculture_action(weather_df)
