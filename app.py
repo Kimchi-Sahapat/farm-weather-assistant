@@ -1,5 +1,5 @@
-# app_pretty.py (final final patch: smart file detection)
-# Streamlit Web App: Farm Weather Assistant (Beautiful UI + Full Smart Format Support)
+# app_pretty.py (smart row alignment patch)
+# Streamlit Web App: Farm Weather Assistant (Robust XML/CSV/XLS support)
 
 import streamlit as st
 import pandas as pd
@@ -20,7 +20,7 @@ def load_raw_weather_file(file):
         df = pd.read_csv(file, parse_dates=['Date/Time'])
         return df
     except Exception:
-        file.seek(0)  # Rewind file pointer
+        file.seek(0)
         first_bytes = file.read(10)
         file.seek(0)
         if b'<?xml' in first_bytes:
@@ -53,7 +53,16 @@ def load_raw_weather_file(file):
                 else:
                     new_columns.append(f"{h1} ({h2})")
 
-            df = pd.DataFrame(data[2:], columns=new_columns)
+            # Align rows properly
+            fixed_data = []
+            for row in data[2:]:
+                if len(row) < len(new_columns):
+                    row += [None] * (len(new_columns) - len(row))
+                elif len(row) > len(new_columns):
+                    row = row[:len(new_columns)]
+                fixed_data.append(row)
+
+            df = pd.DataFrame(fixed_data, columns=new_columns)
             df = df.dropna(axis=1, how='all')
             df.rename(columns={df.columns[0]: 'Date/Time'}, inplace=True)
             df['Date/Time'] = pd.to_datetime(df['Date/Time'], errors='coerce')
