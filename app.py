@@ -1,5 +1,5 @@
 # app.py
-# Streamlit Web App: Farm Weather Assistant (Enhanced with Upload Feature)
+# Streamlit Web App: Farm Weather Assistant (Chatbot Version)
 
 import streamlit as st
 import pandas as pd
@@ -10,6 +10,7 @@ import os
 DATA_FILE = 'Cleaned_Farm_Weather_Data.csv'
 
 @st.cache_data
+
 def load_data(file):
     return pd.read_csv(file, parse_dates=['Date/Time'])
 
@@ -42,8 +43,8 @@ def recommend_agriculture_action(df):
         return "📍 No special agricultural actions recommended at this time."
 
 # Streamlit App UI
-st.title("🌾 Farm Weather Assistant")
-st.markdown("Analyze your farm's weather patterns and receive actionable advice.")
+st.title("🌾 Farm Weather Assistant - Chat Mode")
+st.markdown("Chat naturally with your farm weather data!")
 st.divider()
 
 # File uploader
@@ -62,23 +63,43 @@ else:
 st.divider()
 
 if weather_df is not None:
-    query = st.text_input("Ask a question (e.g., 'rainfall last month', 'compare April', 'farming advice'):")
+    # Chat Interface
+    if 'history' not in st.session_state:
+        st.session_state['history'] = []
 
-    if st.button("Get Answer"):
-        if 'rain' in query.lower() and 'last month' in query.lower():
+    for message in st.session_state['history']:
+        with st.chat_message(message['role']):
+            st.markdown(message['content'])
+
+    user_message = st.chat_input("Ask about rainfall, temperature, or farming advice!")
+
+    if user_message:
+        st.session_state['history'].append({"role": "user", "content": user_message})
+        
+        with st.chat_message("user"):
+            st.markdown(user_message)
+
+        # Bot thinking
+        response = "🤔 Sorry, I didn't understand. Try asking about rainfall, April temperature, or farming advice."
+
+        user_lower = user_message.lower()
+
+        if 'rain' in user_lower and ('last month' in user_lower or 'rainfall' in user_lower):
             rain = get_total_rainfall_last_month(weather_df)
-            st.success(f"🌧️ Total Rainfall Last Month: **{rain:.2f} mm**")
+            response = f"🌧️ Total rainfall last month: **{rain:.2f} mm**."
 
-        elif 'april' in query.lower() and ('hotter' in query.lower() or 'temperature' in query.lower()):
+        elif 'april' in user_lower and ('hotter' in user_lower or 'temperature' in user_lower):
             this_year, last_year = compare_april_temperature(weather_df)
             if pd.isna(this_year) or pd.isna(last_year):
-                st.warning("⚠️ Not enough data available for temperature comparison.")
+                response = "⚠️ Not enough data available for April temperature comparison."
             else:
-                st.info(f"🌡️ **April {datetime.today().year}** Avg Temp: **{this_year:.2f} °C**\n\n🌡️ **April {datetime.today().year-1}** Avg Temp: **{last_year:.2f} °C**")
+                response = f"🌡️ April {datetime.today().year}: **{this_year:.2f} °C**\n🌡️ April {datetime.today().year-1}: **{last_year:.2f} °C**."
 
-        elif any(word in query.lower() for word in ['advice', 'farming', 'recommend', 'action']):
+        elif any(word in user_lower for word in ['advice', 'fertilize', 'recommend', 'action', 'farming']):
             recommendation = recommend_agriculture_action(weather_df)
-            st.success(recommendation)
+            response = recommendation
 
-        else:
-            st.warning("⚠️ Sorry, I didn't recognize the question. Try asking about rainfall, April temperature, or farming actions.")
+        with st.chat_message("assistant"):
+            st.markdown(response)
+
+        st.session_state['history'].append({"role": "assistant", "content": response})
