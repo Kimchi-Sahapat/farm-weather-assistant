@@ -1,9 +1,8 @@
-# app_pretty.py
-# Streamlit Web App: Farm Weather Assistant (Beautiful UI Version)
+# app_pretty.py (patched + friendly loading)
+# Streamlit Web App: Farm Weather Assistant (Beautiful UI + Smooth UX)
 
 import streamlit as st
 import pandas as pd
-import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 import os
 
@@ -16,45 +15,23 @@ DATA_FILE = 'Cleaned_Farm_Weather_Data.csv'
 
 def load_raw_weather_file(file):
     try:
+        # Try reading as CSV first
         df = pd.read_csv(file, parse_dates=['Date/Time'])
         return df
     except Exception:
-        tree = ET.parse(file)
-        root = tree.getroot()
-        namespace = {'ss': 'urn:schemas-microsoft-com:office:spreadsheet'}
-
-        worksheet = root.find('.//ss:Worksheet', namespace)
-        table = worksheet.find('.//ss:Table', namespace)
-        rows = table.findall('.//ss:Row', namespace)
-
-        data = []
-        for row in rows:
-            values = []
-            for cell in row.findall('.//ss:Cell', namespace):
-                data_elem = cell.find('.//ss:Data', namespace)
-                if data_elem is not None:
-                    values.append(data_elem.text)
-                else:
-                    values.append(None)
-            data.append(values)
-
-        header_1 = data[0]
-        header_2 = data[1]
-        new_columns = []
-        for h1, h2 in zip(header_1, header_2):
-            if pd.isna(h1) or h1 is None:
-                new_columns.append(h2)
-            else:
-                new_columns.append(f"{h1} ({h2})")
-
-        df = pd.DataFrame(data[2:], columns=new_columns)
-        df = df.dropna(axis=1, how='all')
-        df.rename(columns={df.columns[0]: 'Date/Time'}, inplace=True)
-        df['Date/Time'] = pd.to_datetime(df['Date/Time'], errors='coerce')
-        for col in df.columns[1:]:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-
-        return df
+        try:
+            # Try reading as Excel (station binary xls)
+            df = pd.read_excel(file)
+            if 'Date/Time' not in df.columns:
+                df.columns = df.iloc[1]
+                df = df.drop([0,1]).reset_index(drop=True)
+            df['Date/Time'] = pd.to_datetime(df['Date/Time'], errors='coerce')
+            for col in df.columns[1:]:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            return df
+        except Exception as e:
+            st.error(f"❌ Could not read the file. Please upload a valid Cleaned CSV or Station XLS file.\n(Technical error: {e})")
+            return None
 
 # Helper functions
 def get_total_rainfall_last_month(df):
@@ -84,7 +61,7 @@ def recommend_agriculture_action(df):
     else:
         return "📍 No special agricultural actions recommended at this time."
 
-# Pest thresholds database
+# Pest database
 PEST_DATABASE = {
     "เพลี้ยไฟ": {"Topt_min": 28, "Topt_max": 32, "Note": "Sensitive to light and low humidity."},
     "เพลี้ยแป้ง": {"Topt_min": 25, "Topt_max": 30, "Note": "Prefers stable climates."},
@@ -109,7 +86,7 @@ def check_pest_risks(df):
     else:
         return "✅ No significant pest risks detected based on recent temperatures."
 
-# Streamlit App UI
+# Streamlit Layout
 st.markdown("""
 # 🌾 Farm Weather Assistant
 Welcome to your smart farming companion.
@@ -118,14 +95,18 @@ Chat naturally with your weather data and receive farming advice and pest warnin
 
 st.divider()
 
-# File uploader
+# Upload Section
 with st.container():
     st.subheader("📂 Upload Farm Weather Data")
     uploaded_file = st.file_uploader("Upload a Cleaned CSV or Raw XLS from Weather Station", type=["csv", "xls"])
 
 if uploaded_file is not None:
-    weather_df = load_raw_weather_file(uploaded_file)
-    st.success("✅ Weather data loaded successfully!")
+    with st.spinner("📈 Loading your weather data..."):
+        weather_df = load_raw_weather_file(uploaded_file)
+        if weather_df is not None:
+            st.success("✅ Weather data loaded successfully!")
+        else:
+            st.stop()
 elif os.path.exists(DATA_FILE):
     weather_df = load_raw_weather_file(DATA_FILE)
     st.info("ℹ️ Using default Cleaned_Farm_Weather_Data.csv.")
@@ -135,6 +116,7 @@ else:
 
 st.divider()
 
+# Chat Section
 if weather_df is not None:
     st.subheader("💬 Chat with Your Farm Data")
     if 'history' not in st.session_state:
