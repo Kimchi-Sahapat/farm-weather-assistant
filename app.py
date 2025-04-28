@@ -39,6 +39,34 @@ TEXTS = {
     }
 }
 
+# 🐛 Pest Database
+PEST_DATABASE = {
+    "เพลี้ยไฟ (Thrips)": {
+        "Topt_min": 28,
+        "Topt_max": 32,
+        "advice_en": "Thrips thrive in dry, hot conditions. Inspect young shoots closely.",
+        "advice_th": "เพลี้ยไฟระบาดหนักช่วงอากาศร้อนและแห้ง ตรวจสอบยอดอ่อนอย่างสม่ำเสมอ"
+    },
+    "เพลี้ยแป้ง (Mealybug)": {
+        "Topt_min": 25,
+        "Topt_max": 30,
+        "advice_en": "Mealybugs prefer stable, humid conditions. Monitor closely during rainy periods.",
+        "advice_th": "เพลี้ยแป้งชอบอากาศชื้น ควรตรวจสอบช่วงฤดูฝน"
+    },
+    "ไรแดง (Spider Mite)": {
+        "Topt_min": 30,
+        "Topt_max": 32,
+        "advice_en": "Spider mites outbreak during hot and dry weather. Increase field scouting.",
+        "advice_th": "ไรแดงระบาดในสภาพอากาศร้อนจัดและแห้ง เพิ่มความถี่ในการสำรวจแปลง"
+    },
+    "หนอนเจาะผลไม้ (Fruit Borer)": {
+        "Topt_min": 28,
+        "Topt_max": 30,
+        "advice_en": "Fruit borers lay eggs on developing fruits. Bag fruits early.",
+        "advice_th": "หนอนเจาะผลไม้จะวางไข่ที่ผลอ่อน ควรห่อผลตั้งแต่เนิ่นๆ"
+    }
+}
+
 # Databases
 CROP_BASE_TEMPS = {
     "ข้าวโพด (Maize)": 10,
