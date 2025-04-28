@@ -1,68 +1,32 @@
-# 🌾 Farm Weather Assistant - Ultra Final app.py (Part 1)
+# 📋 Farm Weather Assistant - app.py
 
-from modules.gps_helper import auto_detect_location, manual_select_location
 import streamlit as st
 import pandas as pd
+from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 import requests
 import folium
 from streamlit_folium import st_folium
-from datetime import datetime, timedelta
-import os
 
-# 📋 Streamlit page config
-st.set_page_config(page_title="Farm Weather Assistant", page_icon="🌾", layout="wide")
+# Custom modules
+from modules.gps_helper import auto_detect_location, manual_select_location
+from modules.smart_alert import generate_smart_alerts
+from modules.task_planner import generate_task_plan
 
-# 🌍 Language and Theme Selection
-with st.sidebar:
-    lang = st.radio("🌐 Language / ภาษา", ("English", "ภาษาไทย"))
-    theme = st.radio("🎨 Theme Mode", ("🌞 Light", "🌙 Dark"))
-if theme == "🌙 Dark":
-    st.markdown("""
-        <style>
-        body {
-            background-color: #0E1117;
-            color: #FAFAFA;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-# ✅ Your TMD API credentials
+# ✅ API credentials
 UID = "u68sahapat"
 UKEY = "8aa48a692a260d6f2319036fa75298cf"
 
-# 🌎 Auto Detect Location
-st.divider()
-st.subheader("📍 My Location and Rain Radar")
+# 📋 Streamlit Page Config
+st.set_page_config(page_title="Farm Weather Assistant", page_icon="🌾", layout="wide")
 
-col1, col2 = st.columns(2)
+# 🌍 Language and Theme Settings
+with st.sidebar:
+    lang = st.radio("🌐 Language / ภาษา", ("English", "ภาษาไทย"))
+    theme = st.selectbox("🎨 Theme Mode", ("light", "dark"))
+    st.session_state.theme_mode = theme
 
-# --- Column 1: GPS Auto-detect and Manual Fallback
-with col1:
-    gps_mode = st.radio("Location Mode", ("📡 Auto Detect", "🗺️ Manual Select"), index=0)
-
-    if gps_mode == "📡 Auto Detect":
-        location = auto_detect_location()
-        if location and 'loc' in location:
-            lat, lon = map(float, location['loc'].split(","))
-            st.success(f"📍 Detected: {location.get('city', 'Unknown')}, {location.get('region', '')}")
-        else:
-            st.warning("⚠️ Auto-detect failed. Please select manually.")
-            lat, lon = manual_select_location()
-    else:
-        lat, lon = manual_select_location()
-
-with col2:
-    m = folium.Map(location=[lat, lon], zoom_start=6)
-    folium.raster_layers.TileLayer(
-        tiles="https://radar.tmd.go.th/Composite_SRI/{z}/{x}/{y}.png",
-        attr="TMD Radar",
-        name="Rain Radar",
-        opacity=0.5,
-    ).add_to(m)
-    st_folium(m, width=400, height=350)
-
-# 🌏 Text Dictionaries (English/Thai)
+# 🌾 Text Dictionary
 TEXTS = {
     "English": {
         "upload_title": "Upload your weather station file (.csv or .xls)",
@@ -80,8 +44,6 @@ TEXTS = {
         "gdd_accumulated": "Accumulated GDD",
         "smart_alerts": "🌟 Smart Farm Alerts",
         "weekly_plan": "📅 Weekly Farm Planner",
-        "location_detected": "Location Detected",
-        "location_not_detected": "Could not auto-detect location. Please select manually.",
     },
     "ภาษาไทย": {
         "upload_title": "อัปโหลดไฟล์สถานีอากาศ (.csv หรือ .xls)",
@@ -99,56 +61,37 @@ TEXTS = {
         "gdd_accumulated": "GDD สะสม",
         "smart_alerts": "🌟 การแจ้งเตือนอัจฉริยะ",
         "weekly_plan": "📅 แผนงานฟาร์มประจำสัปดาห์",
-        "location_detected": "ตรวจพบตำแหน่งที่ตั้ง",
-        "location_not_detected": "ไม่สามารถตรวจจับตำแหน่งอัตโนมัติ กรุณาเลือกเอง",
     }
 }
 
-# 🗺️ Sidebar Navigation
-with st.sidebar:
-    st.markdown("### 🌾 Farm Weather Assistant")
-    st.divider()
-    page = st.radio(
-        "📂 Navigation Menu",
-        ("📊 Dashboard", "📈 Forecast", "📖 Reference"),
-        index=0
-    )
-    st.divider()
-    st.caption("🌾 Powered by Farm Weather Assistant")
-
-
-# 📦 Pest and Crop Databases
-PEST_DATABASE = {
-    "เพลี้ยไฟ": {"Topt_min": 28, "Topt_max": 32, "Note": "Sensitive to light and low humidity."},
-    "เพลี้ยแป้ง": {"Topt_min": 25, "Topt_max": 30, "Note": "Prefers stable climates."},
-    "ไรแดง": {"Topt_min": 30, "Topt_max": 32, "Note": "Outbreaks in dry air."},
-    "หนอนเจาะผลไม้": {"Topt_min": 28, "Topt_max": 30, "Note": "Very important in mango/durian."},
-    "ด้วงวงมะม่วง": {"Topt_min": 30, "Topt_max": 30, "Note": "Moves quickly during hot season."},
-    "หนอนกระทู้": {"Topt_min": 27, "Topt_max": 30, "Note": "Life cycle speed up."},
-    "แมลงวันผลไม้": {"Topt_min": 27, "Topt_max": 30, "Note": "Lays eggs during early ripening."}
-}
-
+# 📚 Database
 CROP_BASE_TEMPS = {
     "ทุเรียน (Durian)": 15,
     "ข้าวโพด (Maize)": 10,
     "มะม่วง (Mango)": 13,
     "มันสำปะหลัง (Cassava)": 8,
     "ข้าว (Rice)": 8,
-    "ลิ้นจี่ (Lychee)": 7
+    "ลิ้นจี่ (Lychee)": 7,
 }
 
-# 📥 Upload Farm Weather Data
+# 📋 Sidebar Navigation
+with st.sidebar:
+    st.markdown("### 🌾 Farm Weather Assistant")
+    page = st.radio("", ("📊 Dashboard", "📈 Forecast", "📖 Reference"))
+    st.divider()
+    st.caption("🌾 Powered by Farm Weather Assistant")
+# 📊 Dashboard Page
 if page == "📊 Dashboard":
     st.title("📊 " + TEXTS[lang]["upload_title"])
 
     uploaded_file = st.file_uploader(TEXTS[lang]['upload_title'], type=["csv", "xls"])
 
+    # Load uploaded file
     if uploaded_file is not None:
         try:
-            weather_df = pd.read_csv(uploaded_file, parse_dates=["Date/Time"])
-            st.success("✅ CSV file loaded!")
-        except Exception:
-            try:
+            if uploaded_file.name.endswith(".csv"):
+                weather_df = pd.read_csv(uploaded_file, parse_dates=["Date/Time"])
+            else:
                 file_bytes = uploaded_file.read()
                 if b"<?xml" in file_bytes[:10]:
                     root = ET.fromstring(file_bytes)
@@ -164,48 +107,48 @@ if page == "📊 Dashboard":
                     weather_df["Date/Time"] = pd.to_datetime(weather_df["Date/Time"], errors="coerce")
                     for col in weather_df.columns[1:]:
                         weather_df[col] = pd.to_numeric(weather_df[col], errors="coerce")
-                    st.success("✅ XML XLS file loaded!")
                 else:
                     uploaded_file.seek(0)
                     weather_df = pd.read_excel(uploaded_file, engine="openpyxl")
                     weather_df["Date/Time"] = pd.to_datetime(weather_df["Date/Time"], errors="coerce")
-                    st.success("✅ XLS file loaded!")
-            except Exception as e:
-                st.error(f"❌ Error reading file: {e}")
-                weather_df = None
+
+            st.success("✅ Weather file loaded successfully!")
+
+        except Exception as e:
+            st.error(f"❌ Error loading file: {e}")
+            weather_df = None
     else:
         weather_df = None
 
-    # 📋 If Data Available
+    # If weather data is available
     if weather_df is not None:
-
-        # 🌱 Crop Selection
+        # 🌱 Select Crop
         st.subheader(f"🌱 {TEXTS[lang]['select_crop']}")
         selected_crop = st.selectbox("", list(CROP_BASE_TEMPS.keys()))
         base_temp = CROP_BASE_TEMPS[selected_crop]
 
-        # 🌤️ Today's Summary
+        # 🌞 Today's Farm Weather Summary
         st.divider()
         st.subheader(f"🌞 {TEXTS[lang]['weather_summary']}")
+
         today = datetime.today().date()
         today_data = weather_df[weather_df["Date/Time"].dt.date == today]
 
         if not today_data.empty:
-            rainfall_today = today_data['Precipitation [mm] (avg)'].sum() if 'Precipitation [mm] (avg)' in today_data.columns else None
-            avg_temp_today = today_data['HC Air temperature [°C] (avg)'].mean() if 'HC Air temperature [°C] (avg)' in today_data.columns else None
-            min_humid_today = today_data['HC Relative humidity [%] (min)'].min() if 'HC Relative humidity [%] (min)' in today_data.columns else None
+            rainfall_today = today_data.get('Precipitation [mm] (avg)', pd.Series([None])).sum()
+            avg_temp_today = today_data.get('HC Air temperature [°C] (avg)', pd.Series([None])).mean()
+            min_humid_today = today_data.get('HC Relative humidity [%] (min)', pd.Series([None])).min()
 
-            # 🌡️ GDD calculation
+            # GDD Calculation
             if "HC Air temperature [°C] (max)" in today_data.columns and "HC Air temperature [°C] (min)" in today_data.columns:
                 gdd_today = ((today_data["HC Air temperature [°C] (max)"].max() + today_data["HC Air temperature [°C] (min)"].min()) / 2) - base_temp
             elif avg_temp_today is not None:
                 gdd_today = avg_temp_today - base_temp
             else:
                 gdd_today = 0
-
             gdd_today = gdd_today if gdd_today > 0 else 0
 
-            # ✨ Daily Summary Cards
+            # Show daily summary
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("🌧️ " + TEXTS[lang]["rainfall_today"], f"{rainfall_today:.1f} mm" if rainfall_today else "N/A")
@@ -216,189 +159,170 @@ if page == "📊 Dashboard":
 
             st.divider()
 
-            # 🌟 Smart Alerts
+            # 🌟 Smart Farm Alerts
             st.subheader(TEXTS[lang]["smart_alerts"])
-            if rainfall_today and rainfall_today > 20:
-                st.warning("🌧️ Heavy Rain Alert! Possible waterlogging. Check drainage systems.")
-            if avg_temp_today and avg_temp_today > 35:
-                st.error("🔥 Heat Stress Risk! Monitor water and shade management.")
-            if min_humid_today and min_humid_today < 30:
-                st.info("💨 Dry Air Warning. Increased pest risk. Inspect crops frequently.")
+
+            forecast_points = []
+            for _, row in today_data.iterrows():
+                forecast_points.append({
+                    'rain': row.get('Precipitation [mm] (avg)', 0),
+                    'temp': row.get('HC Air temperature [°C] (avg)', 0),
+                    'humidity': row.get('HC Relative humidity [%] (avg)', 70)
+                })
+
+            alerts = generate_smart_alerts(forecast_points, gdd_today)
+            for alert in alerts:
+                st.success(alert)
 
         else:
-            st.info("ℹ️ No weather data recorded for today.")
-
-# 🌦️ Rain Radar + My Location
+            st.info("ℹ️ No weather data for today.")
+# 📍 Rain Radar and My Location
 st.divider()
 st.subheader("🌧️ " + TEXTS[lang]["radar_title"])
 
 col1, col2 = st.columns(2)
 
+# --- Rain Radar Map
 with col1:
-    st.components.v1.iframe(
-        "https://www.tmd.go.th/en/weather-radar",
-        height=400,
-        scrolling=True
-    )
+    m = folium.Map(location=[13.736717, 100.523186], zoom_start=6)
+    folium.raster_layers.TileLayer(
+        tiles="https://radar.tmd.go.th/Composite_SRI/{z}/{x}/{y}.png",
+        attr="TMD Radar",
+        name="Rain Radar",
+        opacity=0.6,
+    ).add_to(m)
+    st_folium(m, width=400, height=350)
 
+# --- Auto-detect GPS
 with col2:
-    st.markdown("### 📍 " + TEXTS[lang]["location_detected"])
-    lat, lon, city = auto_detect_location()
+    st.markdown("### 📍 Location Detection")
 
-    if lat is None or lon is None:
-        st.warning(f"⚠️ {TEXTS[lang]['location_not_detected']}")
-        lat, lon, city = manual_select_location()
+    gps_mode = st.radio("Choose Location Mode", ["📡 Auto Detect", "🗺️ Manual Select"])
+
+    if gps_mode == "📡 Auto Detect":
+        location_info = auto_detect_location()
+        if location_info:
+            lat, lon = map(float, location_info['loc'].split(','))
+            st.success(f"📍 Detected Location: {location_info.get('city', 'Unknown City')}")
+        else:
+            st.warning("⚠️ Failed to detect automatically. Please select manually.")
+            lat, lon = manual_select_location()
     else:
-        st.success(f"📍 {city}")
+        lat, lon = manual_select_location()
 
     st.map(pd.DataFrame({'lat': [lat], 'lon': [lon]}))
 
-# 🌦️ Forecast Section
+# 📈 7-Day Forecast Summary (TMD API)
 st.divider()
 st.subheader("📈 " + TEXTS[lang]["forecast_title"])
 
-UID = "u68sahapat"
-UKEY = "8aa48a692a260d6f2319036fa75298cf"
-
-params = {
-    "uid": UID,
-    "ukey": UKEY,
-    "lat": lat,
-    "lon": lon
-}
-
-forecast_url = "https://data.tmd.go.th/nwpapi/v1/forecast/location/daily"
-
 try:
-    forecast_response = requests.get(forecast_url, params=params, timeout=10)
-    forecast_response.raise_for_status()
-    forecast_data = forecast_response.json().get('WeatherForecasts', [])
+    from modules.tmd_api import fetch_daily_forecast
 
-    if forecast_data:
-        forecast_list = []
-        for entry in forecast_data:
-            forecast_list.append({
-                "Datetime": entry['DateTime'],
-                "Temperature (°C)": entry['Temperature']['Value'],
-                "Rain (%)": entry['Rain']['Value'],
-                "Wind (km/h)": entry['WindSpeed']['Value'],
-                "Weather": entry['WeatherDescriptionTH'] if lang == "ภาษาไทย" else entry['WeatherDescription']
-            })
+    forecast_raw = fetch_daily_forecast(lat, lon)
 
-        forecast_df = pd.DataFrame(forecast_list)
+    forecast_data = []
+    for item in forecast_raw[:7]:  # limit to 7 days
+        forecast_data.append({
+            "date": item.get('Date'),
+            "temp": item.get('Tmax', None),
+            "rain": item.get('Rain', None),
+            "desc": item.get('WeatherDescriptionTH') if lang == "ภาษาไทย" else item.get('WeatherDescription')
+        })
 
-        for idx, row in forecast_df.head(7).iterrows():
-            st.info(f"**{row['Datetime']}**\n\n🌡️ {row['Temperature (°C)']} °C | 🌧️ {row['Rain (%)']}% chance | 🌬️ {row['Wind (km/h)']} km/h\n\n{row['Weather']}")
+    forecast_df = pd.DataFrame(forecast_data)
+
+    if not forecast_df.empty:
+        for _, row in forecast_df.iterrows():
+            st.info(
+                f"**{row['date']}**\n\n"
+                f"🌡️ Max Temp: {row['temp']} °C\n"
+                f"🌧️ Rainfall: {row['rain']} mm\n\n"
+                f"{row['desc']}"
+            )
     else:
-        st.warning("⚠️ No forecast data received.")
-except Exception as e:
-    st.warning(f"⚠️ Could not fetch forecast: {e}")
+        st.warning("⚠️ No forecast data available.")
 
-# 🔥 Risk Timeline Color Bar
+except Exception as e:
+    st.error(f"❌ Could not load forecast: {e}")
+
+# 🚦 Risk Timeline (Rainfall Focus)
 st.divider()
 st.subheader("🚦 Risk Timeline (Next 7 Days)")
 
-if 'forecast_df' in locals() and not forecast_df.empty:
-    risk_colors = []
-    for rain in forecast_df['Rain (%)'].head(7):
-        if rain >= 80:
-            risk_colors.append("🔴 Very High")
-        elif rain >= 50:
-            risk_colors.append("🟠 High")
-        elif rain >= 20:
-            risk_colors.append("🟡 Moderate")
+if not forecast_df.empty:
+    risk_levels = []
+    for rain in forecast_df['rain']:
+        if rain is not None:
+            if rain >= 30:
+                risk_levels.append("🔴 Very High Risk")
+            elif rain >= 10:
+                risk_levels.append("🟠 Medium Risk")
+            else:
+                risk_levels.append("🟢 Low Risk")
         else:
-            risk_colors.append("🟢 Low")
+            risk_levels.append("⚪ Unknown")
 
-    risk_df = pd.DataFrame({
-        "Date": forecast_df['Datetime'].head(7),
-        "Rain Chance (%)": forecast_df['Rain (%)'].head(7),
-        "Risk Level": risk_colors
+    timeline_df = pd.DataFrame({
+        "Date": forecast_df['date'],
+        "Risk Level": risk_levels
     })
 
-    st.dataframe(risk_df)
-else:
-    st.info("No forecast data to generate Risk Timeline.")
+    st.dataframe(timeline_df)
 
-
-# 🌱 Smart Fertilizer and Pest Advisory
+# 🧠 Smart Farm Advisory
 st.divider()
-st.subheader("🧠 " + TEXTS[lang]["smart_alerts"])
+st.subheader("🧠 Smart Farm Advisory")
 
-advisory_msgs = []
+from modules.smart_alert import generate_smart_alerts
 
-if 'forecast_df' in locals() and not forecast_df.empty:
-    if forecast_df['Rain (%)'].mean() > 60:
-        advisory_msgs.append("🌧️ Frequent rains expected. Delay fertilizer application.")
-    elif forecast_df['Rain (%)'].mean() < 20:
-        advisory_msgs.append("🌞 Dry conditions ahead. Irrigate before fertilizing.")
-    else:
-        advisory_msgs.append("✅ Good weather for fertilizer application.")
+try:
+    forecast_points = []
+    for idx, row in forecast_df.iterrows():
+        forecast_points.append({
+            'rain': row['rain'] if row['rain'] is not None else 0,
+            'temp': row['temp'] if row['temp'] is not None else 0,
+            'humidity': 70  # fallback (TMD daily forecast may not include humidity)
+        })
 
-    if forecast_df['Rain (%)'].max() > 80:
-        advisory_msgs.append("🐛 Pest outbreak risk due to humidity. Monitor crops closely.")
-    elif forecast_df['Temperature (°C)'].mean() > 32:
-        advisory_msgs.append("🔥 Hot weather alert: Monitor mites and heat-stress signs.")
+    advisory_msgs = generate_smart_alerts(forecast_points, last_gdd if 'last_gdd' in globals() else None)
 
     for msg in advisory_msgs:
         st.success(msg)
-else:
-    st.info("ℹ️ No forecast data available for advisory.")
 
-
-# Pest Outbreak Risk
-if forecast_df['Rain (%)'].max() > 80:
-    advisory_msgs.append("🐛 High risk of pest outbreaks due to humidity. Monitor for fungi and insects closely.")
-elif forecast_df['Temperature (°C)'].mean() > 32:
-    advisory_msgs.append("🔥 Hot weather alert: Monitor for mites and heat-stress pests.")
-
-# GDD Status Advisory
-if last_gdd is not None and last_gdd > 500:
-    advisory_msgs.append("🎯 Accumulated GDD reached! Consider shifting crop stage or preparing for harvest.")
-
-for msg in advisory_msgs:
-    st.success(msg)
+except Exception as e:
+    st.warning(f"⚠️ Could not generate smart advisory: {e}")
 
 # 📅 Weekly Farm Task Planner
 st.divider()
-st.subheader("📅 " + TEXTS[lang]["weekly_plan"])
+st.subheader(TEXTS[lang]["weekly_plan"])
 
-if 'forecast_df' in locals() and not forecast_df.empty:
-    today = datetime.now()
-    planner_tasks = []
+today = datetime.now()
+planner_tasks = []
 
-    for i in range(7):
-        future_day = today + timedelta(days=i)
-        rain_chance = forecast_df.iloc[i]['Rain (%)'] if i < len(forecast_df) else 0
-        task = ""
+for i in range(7):
+    future_day = today + timedelta(days=i)
+    rain_forecast = forecast_df.iloc[i]['rain'] if i < len(forecast_df) else None
 
-        if rain_chance >= 70:
-            task = "🌧️ Avoid spraying, delay fieldwork, inspect fields."
-        elif rain_chance <= 20:
-            task = "☀️ Good day for fertilizing, planting, or soil work."
-        else:
-            task = "🌤️ Moderate risk. Check morning weather."
+    if rain_forecast is None:
+        task = "❓ Weather data not available."
+    elif rain_forecast >= 30:
+        task = "🌧️ Heavy rain expected. Delay heavy field work, inspect drainage."
+    elif rain_forecast >= 10:
+        task = "🌦️ Possible showers. Prepare flexible plans."
+    else:
+        task = "☀️ Dry day. Good for field work, fertilization, or pest management."
 
-        planner_tasks.append({
-            "Date": future_day.strftime("%a %d %b"),
-            "Recommended Task": task
-        })
+    planner_tasks.append({
+        "Date": future_day.strftime("%a %d %b"),
+        "Recommended Task": task
+    })
 
-    task_df = pd.DataFrame(planner_tasks)
-    st.dataframe(task_df)
-else:
-    st.info("ℹ️ No forecast data for weekly planner.")
+task_df = pd.DataFrame(planner_tasks)
+st.dataframe(task_df)
 
-# 🎨 Theme Mode
-if 'theme_mode' not in st.session_state:
-    st.session_state.theme_mode = 'light'
-
-theme_mode = st.sidebar.radio(
-    "🎨 Theme Mode",
-    ["🌞 Light", "🌙 Dark"],
-    index=0 if st.session_state.theme_mode == 'light' else 1
-)
-st.session_state.theme_mode = theme_mode
+# 🎨 Light/Dark Mode Polish
+theme_mode = st.sidebar.radio("🎨 Theme Mode", ["🌞 Light", "🌙 Dark"], index=0)
 
 if theme_mode == "🌙 Dark":
     st.markdown(
@@ -412,3 +336,7 @@ if theme_mode == "🌙 Dark":
         """,
         unsafe_allow_html=True
     )
+
+# 📋 Footer
+st.divider()
+st.caption("🌾 Powered by Farm Weather Assistant - helping you grow smarter every day.")
