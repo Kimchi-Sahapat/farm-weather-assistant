@@ -44,7 +44,7 @@ TEXTS = {
         "gdd_accumulated": "Accumulated GDD",
         "smart_alerts": "🌟 Smart Farm Alerts",
         "weekly_plan": "📅 Weekly Farm Planner",
-    },
+    },  # <--- ADD THIS COMMA
     "ภาษาไทย": {
         "upload_title": "อัปโหลดไฟล์สถานีอากาศ (.csv หรือ .xls)",
         "select_crop": "เลือกชนิดพืช",
@@ -63,6 +63,7 @@ TEXTS = {
         "weekly_plan": "📅 แผนงานฟาร์มประจำสัปดาห์",
     }
 }
+
 
 # 📚 Database
 CROP_BASE_TEMPS = {
